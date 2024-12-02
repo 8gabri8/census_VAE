@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# SLURM settings
+#SBATCH --job-name=census_job   
+#SBATCH --nodes 1
+#SBATCH --ntasks 1                # Run on a single CPU
+#SBATCH --cpus-per-task 1
+#SBATCH --time 1:00:00
+#SBATCH --mem=200GB              # Memory limit
+#SBATCH --output=./../log/3_VAE_train.out
+
+export PYTHONUNBUFFERED=1 # force to write the ourput fiel while running and not just at the end
+
+# Load required modules (if applicable)
+#module load python/3.8  # Replace with your Python version/module
+
+# Activate the virtual environment
+#source /home/dalai/miniconda3/envs/census_env/bin/activate  # Replace with the actual path
+
+# Run the Python script
+python ./../model/train.py
+
+# Deactivate the virtual environment (optional, but good practice)
+#deactivate

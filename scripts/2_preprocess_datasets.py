@@ -203,7 +203,7 @@ from sklearn.preprocessing import LabelEncoder
 label_encoder = LabelEncoder()
 big_adata.obs["concat_label_encoded"] = label_encoder.fit_transform(big_adata.obs["concat_label"])
 
-big_adata.obs["concat_label_encoded"].sort_values()
+#big_adata.obs["concat_label_encoded"].sort_values()
 
 #########################
 ### Save
