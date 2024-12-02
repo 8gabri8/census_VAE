@@ -11,6 +11,8 @@ import anndata as ad
 from anndata import AnnData
 from anndata import read_h5ad
 import gc  
+import scipy.sparse as sp
+
 
 print("Libraries uploaded.\n")
 
@@ -131,6 +133,8 @@ for i, adata in enumerate(adata_datasets_list):
     sc.pp.normalize_total(adata, target_sum=1e4)
     # Step 2: Log-transform the data (optional but common)
     sc.pp.log1p(adata)
+    # Step 3: Z-score
+    sc.pp.scale(adata)
 
 # little check
 # Check the sum of counts per cell
@@ -160,6 +164,10 @@ adata_datasets_list.append(all_genes_anndata)
 
 # Merge all datasets using `outer` join to include all genes
 big_adata = ad.concat(adata_datasets_list, join="outer", label="orig_dataset", fill_value=0)
+
+print(f"Type big_adata.X: {type(big_adata.X)}")
+big_adata.X = sp.csr_matrix(big_adata.X)  # Convert to Compressed Sparse Row format (or another sparse format)
+print(f"Type big_adata.X: {type(big_adata.X)}")
 
 print(f"big_adata.obs: {big_adata.obs}")  # Displaying the observations (rows) of the data
 print("big_adata.var:", big_adata.var)  # Displaying the variables (columns) of the data
