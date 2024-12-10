@@ -8,6 +8,7 @@
 #SBATCH --time 1:00:00
 #SBATCH --mem=800GB              # Memory limit
 #SBATCH --partition=bigmem
+#SBATCH --account=upcourtine      # Specify account to charge
 #SBATCH --output=./../log/2_preprocess_datasets.out
 
 export PYTHONUNBUFFERED=1 # force to write the ourput fiel while running and not just at the end

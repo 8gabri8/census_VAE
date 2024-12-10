@@ -12,6 +12,7 @@ from anndata import AnnData
 from anndata import read_h5ad
 import gc  
 import scipy.sparse as sp
+from scipy.sparse import csr_matrix
 
 
 print("Libraries uploaded.\n")
@@ -85,6 +86,7 @@ for i, dataset in enumerate(dataset_paths):
     
     # Read AnnData
     adata = sc.read(dataset)
+    #print(type(adata.X), adata.X.data.nbytes / (1024 ** 3))
 
     #display(adata.var)
 
@@ -112,13 +114,17 @@ for i, dataset in enumerate(dataset_paths):
 
     adata_datasets_list.append(adata)
 
+    #print(type(adata.X), adata.X.data.nbytes / (1024 ** 3))
+
+    print(adata)
+
     # Clear memory for the next iteration
     del adata
     gc.collect()
 
 # Check that we did not remoed anything important (X matrix is full)
-print(adata_datasets_list[0])
-print(adata_datasets_list[0].X)
+#print(adata_datasets_list[0])
+#print(adata_datasets_list[0].X)
 # Check how many datset have been processed
 len(adata_datasets_list)
 
@@ -133,13 +139,19 @@ for i, adata in enumerate(adata_datasets_list):
     sc.pp.normalize_total(adata, target_sum=1e4)
     # Step 2: Log-transform the data (optional but common)
     sc.pp.log1p(adata)
+    # TODO: add normalization specific for negative bionomial
+        #....
     # Step 3: Z-score
-    sc.pp.scale(adata)
+    #sc.pp.scale(adata)
 
-# little check
+    # ATTENTION: after these passages matrix becomes dense
+    #print(type(adata.X), adata.X.data.nbytes / (1024 ** 3))
+    adata.X = sp.csr_matrix(adata.X)
+    #print(type(adata.X), adata.X.data.nbytes / (1024 ** 3))
+
 # Check the sum of counts per cell
-total_counts_per_cell = np.sum(adata_datasets_list[0].X, axis=1)
-print(f"Total counts per cell: {total_counts_per_cell[:10]}")
+# total_counts_per_cell = np.sum(adata_datasets_list[0].X, axis=1)
+# print(f"Total counts per cell: {total_counts_per_cell[:10]}")
 
 #########################
 ### Create a single dataset, Attention: be sure to have all ~82000 genens
@@ -152,9 +164,10 @@ print(f"Total counts per cell: {total_counts_per_cell[:10]}")
 
 # Create an empty AnnData object with all genes from df_genes_map
 all_genes_anndata = AnnData(
-    X=np.zeros((0, df_genes_map.shape[0])),  # 0 "dummy" observation with zeros for all genes
+    X=csr_matrix((0, df_genes_map.shape[0])),  # ATTENTION: use sparse matrix
     var=pd.DataFrame(index=df_genes_map["gene_id"])  # Set var to have all genes from df_genes_map
 )
+#print(type(all_genes_anndata.X), all_genes_anndata.X.data.nbytes / (1024 ** 3))
 
 # Ensure all genes in df_genes_map are added
 #print(f"All genes AnnData object: {all_genes_anndata}")
