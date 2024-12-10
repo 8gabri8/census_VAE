@@ -6,7 +6,7 @@
 #SBATCH --ntasks 1                # Run on a single CPU
 #SBATCH --cpus-per-task 1
 #SBATCH --time 1:00:00
-#SBATCH --mem=400GB              # Memory limit
+#SBATCH --mem=200GB              # Memory limit
 #SBATCH --partition=bigmem
 #SBATCH --output=./../log/3_VAE_train_%j.out
 
