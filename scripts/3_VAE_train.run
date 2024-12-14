@@ -2,13 +2,13 @@
 
 # SLURM settings
 #SBATCH --job-name=census_job   
-#SBATCH --nodes 1
-#SBATCH --ntasks 1                # Run on a single CPU
-#SBATCH --cpus-per-task 1
+#SBATCH --nodes 10
+#SBATCH --ntasks 4              # Run on a single CPU
+#SBATCH --cpus-per-task 15
 #SBATCH --time 1:00:00
-#SBATCH --mem=200GB              # Memory limit
+#SBATCH --mem=600GB              # Memory limit
 #SBATCH --partition=bigmem
-#SBATCH --output=./../log/3_VAE_train_%j.out
+#SBATCH --output=/scratch/dalai/census_VAE/log/3_VAE_train_%j.out
 
 JOB_ID=$SLURM_JOB_ID  # This automatically gets the job ID assigned by Slurm
 
@@ -21,7 +21,7 @@ export PYTHONUNBUFFERED=1 # force to write the ourput fiel while running and not
 #source /home/dalai/miniconda3/envs/census_env/bin/activate  # Replace with the actual path
 
 # Run the Python script
-python ./../model/train.py --job_id $JOB_ID
+python ./../model/train_parallel.py --job_id $JOB_ID
 
 # Deactivate the virtual environment (optional, but good practice)
 #deactivate
