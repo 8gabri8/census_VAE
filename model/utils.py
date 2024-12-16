@@ -32,9 +32,8 @@ class EarlyStopping:
 
 # Define a simple dataset
 class AnnDataDataset(Dataset):
-    def __init__(self, adata, device):
-        self.device = device
-        self.adata = adata
+    def __init__(self, adata):
+        self.adata = adata # holding a reference to the passed adata object, and it is not creating a new objec
 
     def __len__(self):
         return self.adata.obs.shape[0]
@@ -45,9 +44,8 @@ class AnnDataDataset(Dataset):
         x = adata_tmp.X.toarray() #num_cells(batch_size) x num_genes
 
         # Move data and labels to the appropriate device
-        x = torch.tensor(x, dtype=torch.float32).to(self.device)
-        y = torch.tensor(y, dtype=torch.long).to(self.device)
-        y = y.squeeze(-1)  # Removes the last dimension if it is 1
+        x = torch.tensor(x, dtype=torch.float32)
+        y = torch.tensor(y, dtype=torch.long)
 
         return x, y
 

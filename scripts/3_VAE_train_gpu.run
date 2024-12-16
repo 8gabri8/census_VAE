@@ -1,0 +1,22 @@
+#!/bin/bash
+
+#SBATCH --time 1:00:00
+#SBATCH --job-name=census_job_gpu   
+#SBATCH --output=/home/dalai/census_VAE/log/3_VAE_train_gpu_%j.out
+#SBATCH --ntasks 4
+#SBATCH --mem 64G
+#SBATCH --partition h100
+#SBATCH --gpus-per-node 4
+
+# remeber
+    #--mem is all the ram fro the entire job (all task inside)
+    #in partition l40s: each node has 8 gpu, with 48GB of RAM
+    #so even if you request Xmem, but chenge the orher par, maybe you get more memory
+
+JOB_ID=$SLURM_JOB_ID  # This automatically gets the job ID assigned by Slurm
+
+export PYTHONUNBUFFERED=1 # force to write the ourput fiel while running and not just at the end
+
+# Run the Python script
+python ./../model/train_parallel_gpu.py --job_id $JOB_ID --seed_crossvalidation 8
+
