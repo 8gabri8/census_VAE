@@ -3,10 +3,10 @@
 # SLURM settings
 #SBATCH --job-name=census_job   
 #SBATCH --nodes 10
-#SBATCH --ntasks 4              # Run on a single CPU
+#SBATCH --ntasks 3   
 #SBATCH --cpus-per-task 15
 #SBATCH --time 1:00:00
-#SBATCH --mem=600GB              # Memory limit
+#SBATCH --mem=800GB              # Memory limit
 #SBATCH --partition=bigmem
 #SBATCH --output=/scratch/dalai/census_VAE/log/3_VAE_train_%j.out
 

@@ -5,7 +5,10 @@ from tqdm import tqdm
 import torch
 import torch.nn.functional as F
 import time
-import multiprocessing as mp
+import torch.multiprocessing as mp
+import torch.distributed as dist
+from torch.utils.data import DataLoader
+import os
 
 from utils import *
 
@@ -220,7 +223,12 @@ def losses_VAE(
 def predict_labels(    
     model, 
     adata,
-    batch_size=64):
+    batch_size=64,
+    weigth_losses = [1, 0.01, 1]
+):
+    
+    w_rec, w_kl, w_cls = weigth_losses
+
 
     # Automatically detect the device of the model
     device = next(model.parameters()).device
@@ -228,6 +236,7 @@ def predict_labels(
     # Save true adn predicted labels
     true_labels = []
     predicted_labels = []
+    total_loss = 0
 
     with torch.no_grad():
 
@@ -249,7 +258,16 @@ def predict_labels(
             y = torch.tensor(y, dtype=torch.long).to(device)
 
             # Forward pass
-            _, _, _, _, logits_classification = model(x)
+            encoded, decoded, mu, log_var, logits_classification = model(x)
+
+            # Calculate loss
+            loss, BCE_loss_weighted, KLD_loss_weighted, classification_loss_weighted = losses_VAE(
+                decoded, x, mu, log_var, logits_classification, y,
+                weight_reconstruction=w_rec, weight_KLD=w_kl, weight_classification_loss=w_cls
+            )  
+
+            # Update loss
+            total_loss += loss
 
             # Apply Softmax to logits to get probabilities
             probabilities = torch.softmax(logits_classification, dim=1)
@@ -261,224 +279,128 @@ def predict_labels(
             predicted_labels.extend(batch_predicted_labels.cpu().numpy().tolist())  # Convert to list of ints
             true_labels.extend(y.cpu().numpy().tolist())  # Convert to list of ints
 
-    return true_labels, predicted_labels
+    # Normalize loss
+    total_loss /= adata.obs.shape[0]
 
+    return true_labels, predicted_labels, total_loss
 
-def train_VAE_with_classification(
-    model, 
-    adata,
-    fold_indices, 
-    lr=1e-5, 
-    num_epochs=5,
-    batch_size=64,
-    weigth_losses = [1, 0.01, 1], #reconstruction, kl, classification
-    patience_early_stopping = 10,
-    num_workers=None  # Number of parallel workers
+def train_in_parallel(
+    rank, 
+    world_size, 
+    n_genes, 
+    n_classes, 
+    adata_train, 
+    batch_size, 
+    num_epochs, 
+    model_out_queue,
+    weigth_losses = [1, 0.01, 1],
+    lr=1e-4,
 ):
     
-    # Extarct weigth of losses
+    # Set environment variables for distributed training
+    os.environ["MASTER_ADDR"] = "127.0.0.1"  # Set this to the IP address of the master node
+    os.environ["MASTER_PORT"] = "29500"      # Set this to an open port on the master node
+    os.environ["WORLD_SIZE"] = str(world_size)
+    os.environ["RANK"] = str(rank)
+
+    # Initialize the distributed process group
+    dist.init_process_group(backend='gloo', rank=rank, world_size=world_size)
+
+    print(f"enter in train {rank}")
+
     w_rec, w_kl, w_cls = weigth_losses
 
-    # Automatically detect the device of the model
-    device = next(model.parameters()).device
-    
+    print(f"{rank} - start process:", log_memory_usage())
+
+    # Instantiate the model --> reinitialize each time
+    model = VAEWithClassifier(
+        input_size = n_genes,
+        latent_dim=256, 
+        num_classes=n_classes
+    )
+
+    print(f"{rank} - create model:", log_memory_usage())
+
+
+    # device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
+    # model = model.to(device)
+    # model = nn.parallel.DistributedDataParallel(model, device_ids=[rank] if torch.cuda.is_available() else None)
+    # model = model.to(rank)
+    model = nn.parallel.DistributedDataParallel(model)#, device_ids=[rank])
+
+    # Create a DataLoader with DistributedSampler
+    dataset = AnnDataDataset(adata_train, device="cpu")
+    sampler = torch.utils.data.distributed.DistributedSampler(dataset, num_replicas=world_size, rank=rank)
+    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
+
     # Initialize optimizer
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    # Indices of cells in train and val
-    indices_train = fold_indices[0] # ATTENTION: the indices are in random order, not in increasing order
-    indices_val = fold_indices[1]
-    num_samples_train = len(indices_train)
-    num_samples_val = len(indices_val)
-    print(f"num_samples_train: {num_samples_train}, num_samples_val: {num_samples_val}")
+    # Save losses of train and val for process rank=0
+    epoch_losses_train_rank_0 = []
+    epoch_losses_val_rank_0 = []
 
-    # Save lists
-    epoch_losses_train = []
-    epoch_losses_val = []
 
-    # Instantiate early stopping --> for epochs
-    early_stopping = EarlyStopping(max_patience=patience_early_stopping)
+    print(f"{rank} - before training loop:", log_memory_usage())
 
     # Training loop
+    model.train()
     for epoch in range(num_epochs):
 
-        model.train()
-        total_loss = 0.0  # Initialize total loss for the epoch
+        
+        sampler.set_epoch(epoch)  # Make sure the sampler knows the epoch
+        running_loss = 0.0
 
-        t1 = time.perf_counter()
+        # Initialize tqdm only for rank 0
+        if rank == 0:
+            # Create the progress bar for the first rank
+            progress_bar = tqdm(dataloader, desc=f"Epoch {epoch}", dynamic_ncols=True)
+        else:
+            # Otherwise, set progress_bar to a dummy iterator for other ranks
+            progress_bar = dataloader
 
-        # Create list with batch indices
-        batch_indices_train = [indices_train[i:i + batch_size] for i in range(0, len(indices_train), batch_size)]
-        num_batches_train = len(batch_indices_train)
-        print(f"\nnum_batches_train: {num_batches_train}")
+        print(f"epoch {epoch} {rank}")
 
-        t2 = time.perf_counter()
-        print("\tCalculate indicies", t2-t1)
 
-        # Iterate over the batches in the training data
-        for single_batch_indices_train in tqdm(batch_indices_train, desc=f"Train Epoch {epoch + 1}/{num_epochs}", unit="batch"):
-            
+        for inputs, targets in progress_bar:
+
+            inputs = inputs.squeeze(1)
+
             optimizer.zero_grad()
 
-            t1 = time.perf_counter()
+            encoded, decoded, mu, log_var, logits_classification = model(inputs)
 
-            # Ectract data and labels of this batch
-            adata_tmp = adata[single_batch_indices_train, ]
-            y = adata_tmp.obs["concat_label_encoded"].values.tolist()
-            x = adata_tmp.X.toarray() #num_cells(batch_size) x num_genes
+            print(f"{rank} - After forward:", log_memory_usage())
 
-            t2 = time.perf_counter()
-            print("\tSlice AnnData", t2-t1)
+            #print(logits_classification, logits_classification.shape)
 
-            t1 = time.perf_counter()
-
-            # Move data and labels to the appropriate device
-            x = torch.tensor(x, dtype=torch.float32).to(device)
-            y = torch.tensor(y, dtype=torch.long).to(device)
-            # print(f"x shape: {x.shape}, y shape: {y.shape}")
-            # print("sum gene expression for each cell")
-            # print(torch.sum(x, dim=1))
-
-            t2 = time.perf_counter()
-            print("\tTransfor data to tensor", t2-t1)
-
-            t1 = time.perf_counter()
-
-            # Forward pass
-            encoded, decoded, mu, log_var, logits_classification = model(x)
-
-            t2 = time.perf_counter()
-            print("\tForward pass", t2-t1)
-
-            # Print mu and log_var with detailed formatting
-            # print(f"Mu: {mu.detach().cpu().numpy() if mu.is_cuda else mu.detach().numpy()} | "
-            #     f"\nLog Variance (log_var): {log_var.detach().cpu().numpy() if log_var.is_cuda else log_var.detach().numpy()}")
-
-            # Compute the loss with weights for each component
-            loss, BCE_weighted, KLD_weighted, classification_loss_weighted = losses_VAE(
-                decoded, x, mu, log_var, logits_classification, y,
+            loss, BCE_loss_weighted, KLD_loss_weighted, classification_loss_weighted = losses_VAE(
+                decoded, inputs, mu, log_var, logits_classification, targets,
                 weight_reconstruction=w_rec, weight_KLD=w_kl, weight_classification_loss=w_cls
-            )
+            )  
 
-            t1 = time.perf_counter()
+            print(f"{rank} -After loss:", log_memory_usage())
 
-            # Backward pass
-            loss.backward()
+            print(f"Performing Backward {rank}")
+            loss.backward() #
             optimizer.step()
+            print(f"Weigths updated {rank}")
 
-            t2 = time.perf_counter()
-            print("\tBackpropagation and Step", t2-t1)
+            running_loss += loss.item()
 
-            # Accumulate the total loss
-            total_loss += loss.item()
+        # Print and Save Train loss of this epoch --> only for process rank = 0
+        if rank == 0:
+            epoch_loss_train = running_loss / len(dataloader) # Total loss / number of examples
+            epoch_losses_train_rank_0.append(epoch_loss_train)   
+            print(f"Epoch {epoch}, Loss: {running_loss / len(dataloader)}")
 
-            t1 = time.perf_counter()
+        # Save loss on Val set of this epoch --> only for process rank = 0
+        if rank == 0:
+            pass #evaluate on validation
 
-            del x, y, adata_tmp
-            torch.cuda.empty_cache()
+    if rank == 0:
+        model_out_queue.put(model)  # Put the model in the queue from rank 0
 
-            t2 = time.perf_counter()
-            print("\tDelete Elements", t2-t1)
+    # Clean up
+    dist.destroy_process_group()
 
-        
-        # Compute the average loss for this epoch
-        epoch_loss_train = total_loss / num_samples_train # Total loss / number of examples
-        epoch_losses_train.append(epoch_loss_train)        
-
-        #####################
-        # Evaluation
-
-        t1 = time.perf_counter()
-
-        with torch.no_grad():
-
-            model.eval()
-            total_loss = 0.0  # Initialize total loss for the epoch
-
-            # Create list with batch indices
-            batch_indices_val = [indices_val[i:i + batch_size] for i in range(0, len(indices_val), batch_size)]
-            num_batches_val = len(batch_indices_val)
-
-            # Iterate over the batches in the training data
-            for single_batch_indices_val in tqdm(batch_indices_val, desc=f"Val Epoch {epoch + 1}/{num_epochs}", unit="batch"):
-                
-                # Ectract data and labels of this batch
-                adata_tmp = adata[single_batch_indices_val, ]
-                y = adata_tmp.obs["concat_label_encoded"].values.tolist()
-                x = adata_tmp.X.toarray() #num_cells(batch_size) x num_genes
-
-                # Move data and labels to the appropriate device
-                x = torch.tensor(x, dtype=torch.float32).to(device)
-                y = torch.tensor(y, dtype=torch.long).to(device)
-
-                # Forward pass
-                encoded, decoded, mu, log_var, logits_classification = model(x)
-
-                # Compute the loss with weights for each component
-                loss, BCE_weighted, KLD_weighted, classification_loss_weighted = losses_VAE(
-                    decoded, x, mu, log_var, logits_classification, y,
-                    weight_reconstruction=w_rec, weight_KLD=w_kl, weight_classification_loss=w_cls
-                )
-
-                # Accumulate the total loss
-                total_loss += loss.item()
-
-                del x, y, adata_tmp
-                torch.cuda.empty_cache()
-            
-            # Compute the average loss for this epoch
-            epoch_loss_val = total_loss / num_samples_val # Total loss / number of examples
-            epoch_losses_val.append(epoch_loss_val)  
-
-            print(f"\nEpoch ended, Train Loss: {epoch_loss_train:.2f}, Val Loss: {epoch_loss_val:.2f}")
-
-        t2 = time.perf_counter()
-        print("\tEvaluate on Val", t2-t1)
-
-        # At the edn of each epogh call the erly stoopping
-        early_stopping(epoch_loss_val, model)
-        if early_stopping.early_stop: # Check if early stopping has been triggered
-            print("Early stopping triggered, Loading previous model.")
-            model.load_state_dict(early_stopping.best_model_weights)
-            break
-    
-
-    # Return the trained model
-    return model, epoch_losses_train, epoch_losses_val
-
-# TODO: Conditional VAE
-# class ConditionalVAE(VAE):
-#     # VAE implementation from the article linked above
-#     def __init__(self, num_classes):
-#         super().__init__()
-#         # Add a linear layer for the class label
-#         self.label_projector = nn.Sequential(
-#             nn.Linear(num_classes, self.num_hidden),
-#             nn.ReLU(),
-#         )
-
-#     def condition_on_label(self, z, y):
-#         projected_label = self.label_projector(y.float())
-#         return z + projected_label
-
-#     def forward(self, x, y):
-#         # Pass the input through the encoder
-#         encoded = self.encoder(x)
-#         # Compute the mean and log variance vectors
-#         mu = self.mu(encoded)
-#         log_var = self.log_var(encoded)
-#         # Reparameterize the latent variable
-#         z = self.reparameterize(mu, log_var)
-#         # Pass the latent variable through the decoder
-#         decoded = self.decoder(self.condition_on_label(z, y))
-#         # Return the encoded output, decoded output, mean, and log variance
-#         return encoded, decoded, mu, log_var
-
-#     def sample(self, num_samples, y):
-#         with torch.no_grad():
-#             # Generate random noise
-#             z = torch.randn(num_samples, self.num_hidden).to(device)
-#             # Pass the noise through the decoder to generate samples
-#             samples = self.decoder(self.condition_on_label(z, y))
-#         # Return the generated samples
-#         return samples
