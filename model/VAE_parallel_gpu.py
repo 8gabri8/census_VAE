@@ -141,7 +141,7 @@ class VAEWithClassifier(VAE):
         logits_classification = self.classifier(encoded)
 
         # Message to see if gpu parallelism is working
-        print("\tIn Model (single gpu): input size", x.size(), "output size", logits_classification.size())
+        #print("\tIn Model (single gpu): input size", x.size(), "output size", logits_classification.size())
 
         return encoded, decoded, mu, log_var, logits_classification
     
@@ -335,7 +335,7 @@ def train_parallel(
             encoded, decoded, mu, log_var, logits_classification = model(inputs) ## The model will automatically use multiple GPUs if DataParallel is used
 
             # Check that computation has been split in differ gpu in parallelization
-            print("Outside: input size", inputs.size(), "output_size", logits_classification.size())
+            #print("Outside: input size", inputs.size(), "output_size", logits_classification.size())
 
             # Calculate loss
             loss, BCE_loss_weighted, KLD_loss_weighted, classification_loss_weighted = losses_VAE(
@@ -364,6 +364,7 @@ def train_parallel(
         #print(f"Epoch {epoch}, Loss: {running_loss / len(dataloader)}")
 
         # compute for VALIDATION set
+        print("Compute Loss for Validation Set:")
         _, _, this_epoch_loss_validation = calculate_loss_labels(    
                                             model, 
                                             adata_val,

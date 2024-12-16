@@ -70,10 +70,10 @@ def main():
     ### Load h5ad
     #########################
 
-    #adata = sc.read("/work/upcourtine/clock-classifier/gabriele-results/census_results/merged_30_log1.h5ad")
+    adata = sc.read("/work/upcourtine/clock-classifier/gabriele-results/census_results/merged_30_log1.h5ad")
     # adata = adata[:1000,]
     # adata.write("/work/upcourtine/clock-classifier/gabriele-results/census_results/merged_30_log1_1000_cells.h5ad")
-    adata = sc.read("/work/upcourtine/clock-classifier/gabriele-results/census_results/merged_30_log1_1000_cells.h5ad")
+    #adata = sc.read("/work/upcourtine/clock-classifier/gabriele-results/census_results/merged_30_log1_1000_cells.h5ad")
 
     # Number of cells
     n_cells = adata.obs.shape[0]
@@ -81,11 +81,11 @@ def main():
     n_genes = adata.var.shape[0]
     # Number fo classes to predict
     n_classes = len(adata.obs["concat_label_encoded"].unique())
-    n_classes = 265 # ATTENTION: only when using smaller dataset, otherwise CrossEntirpy will give error
+    #n_classes = 265 # ATTENTION: only when using smaller dataset, otherwise CrossEntirpy will give error
     # Number of Epcohs
     num_epochs = 1
     # Batch size
-    batch_size = 100#512
+    batch_size = 512 #100
     # Number of folds for crossvalidation
     n_folds = 1
     # wirghts of the differt losses of VAE
@@ -227,6 +227,7 @@ def main():
         "predicted_val_labels": predicted_val_labels,
         "true_test_labels": true_test_labels,
         "predicted_test_labels": predicted_test_labels}
+    
     predicted_labels_path =  os.path.join(SAVE_FOLDER, f'{i}_labels_predicted.json')
     with open(predicted_labels_path, "w") as f:
         json.dump(labels_data, f, indent=4)
@@ -249,4 +250,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    print("The trained model is ready for use.")
