@@ -359,7 +359,7 @@ def train_parallel(
             del inputs, targets, encoded, decoded, mu, log_var, logits_classification
             torch.cuda.empty_cache()
 
-        this_epoch_loss = this_epoch_loss / len(train_dataloader) # Total loss / number of examples
+        this_epoch_loss = this_epoch_loss / adata_train.obs.shape[0] # Total loss / number of examples
         losses_train.append(this_epoch_loss)   
         #print(f"Epoch {epoch}, Loss: {running_loss / len(dataloader)}")
 

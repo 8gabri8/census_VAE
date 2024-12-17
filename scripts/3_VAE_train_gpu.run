@@ -18,5 +18,5 @@ JOB_ID=$SLURM_JOB_ID  # This automatically gets the job ID assigned by Slurm
 export PYTHONUNBUFFERED=1 # force to write the ourput fiel while running and not just at the end
 
 # Run the Python script
-python ./../model/train_parallel_gpu.py --job_id $JOB_ID --seed_crossvalidation 8
+python ./../model/train_parallel_gpu_ddp.py --job_id $JOB_ID --seed_crossvalidation 8
 

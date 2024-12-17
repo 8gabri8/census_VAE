@@ -11,7 +11,7 @@ import json
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
 
-from VAE_parallel import *
+from model.VAE_parallel_cpu import *
 
 # Remember to checj in the outer.run file that the memory and time are appropriate for the task
 

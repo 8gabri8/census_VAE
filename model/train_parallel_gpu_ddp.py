@@ -11,7 +11,7 @@ import json
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
 
-from VAE_parallel_gpu import *
+from VAE_parallel_gpu_ddp import *
 
 # Remember to checj in the outer.run file that the memory and time are appropriate for the task
 
@@ -43,6 +43,7 @@ def main():
 
     # Check GPUs free sapce
     #print(torch.cuda.memory_summary())
+    num_gpus=2
 
     #########################
     ### Set Random Seed
@@ -70,10 +71,10 @@ def main():
     ### Load h5ad
     #########################
 
-    adata = sc.read("/work/upcourtine/clock-classifier/gabriele-results/census_results/merged_30_log1.h5ad")
+    #adata = sc.read("/work/upcourtine/clock-classifier/gabriele-results/census_results/merged_30_log1.h5ad")
     # adata = adata[:1000,]
     # adata.write("/work/upcourtine/clock-classifier/gabriele-results/census_results/merged_30_log1_1000_cells.h5ad")
-    #adata = sc.read("/work/upcourtine/clock-classifier/gabriele-results/census_results/merged_30_log1_1000_cells.h5ad")
+    adata = sc.read("/work/upcourtine/clock-classifier/gabriele-results/census_results/merged_30_log1_1000_cells.h5ad")
 
     # Number of cells
     n_cells = adata.obs.shape[0]
@@ -81,11 +82,11 @@ def main():
     n_genes = adata.var.shape[0]
     # Number fo classes to predict
     n_classes = len(adata.obs["concat_label_encoded"].unique())
-    #n_classes = 265 # ATTENTION: only when using smaller dataset, otherwise CrossEntirpy will give error
+    n_classes = 265 # ATTENTION: only when using smaller dataset, otherwise CrossEntirpy will give error
     # Number of Epcohs
     num_epochs = 1
     # Batch size
-    batch_size = 512 #100
+    batch_size = 100 #512 #100
     # Number of folds for crossvalidation
     n_folds = 1
     # wirghts of the differt losses of VAE
@@ -140,37 +141,33 @@ def main():
     ### Train
     #########################
 
-    # Instantiate the model
-    print("\nModel Instantiated")
-    model = VAEWithClassifier(
-        input_size = n_genes,
-        latent_dim=256, 
-        num_classes=n_classes
+    # List to retrieve data from the parallel processes
+    model_out_queue = mp.Queue()
+
+    # Call Training loop
+    print("\nStart Train in Parallel...\nLaunching parallel processes")
+    mp.spawn(
+        train_parallel_gpu_ddp, 
+        args=(
+            # RANK AOUTOMAICALLY PASSED
+            num_gpus,  # Pass world_size as the first argument
+            n_genes, n_classes, # Needed to intialize the model
+            adata_train, 
+            adata_val, 
+            batch_size, 
+            num_epochs, 
+            model_out_queue,
+            weigth_losses,  
+            1e-4  # Pass learning rate
+        ), 
+        nprocs=num_gpus, 
+        join=True
     )
 
-    # DataParallel will use multiple GPUs if available
-    if torch.cuda.is_available():
-        print("Model Parallelized across GPUs.")
-        model = nn.DataParallel(model)  # AUTOMATICALLY uses all available GPUs
-        #DataParallel splits your data automatically and sends job orders to multiple models on several GPUs. 
-        # After each model finishes their job, DataParallel collects and merges the results before returning it to you.
-        # https://pytorch.org/tutorials/beginner/blitz/data_parallel_tutorial.html
-    else:
-        print("No Parallelization across GPUs.")
+    model = model_out_queue.get()  # Model is returned from rank 0 after all processes finish
+    losses_train = model_out_queue.get()
+    losses_val = model_out_queue.get()
 
-    # Move the model to GPU (if available)
-    model.to(device)
-
-    # Train model
-    model, losses_train, losses_val = train_parallel(  
-        model,  
-        adata_train, 
-        adata_val, 
-        batch_size, 
-        num_epochs, 
-        weigth_losses = weigth_losses,
-        lr=1e-4,
-    )
 
     #########################
     ### Predict Labels
