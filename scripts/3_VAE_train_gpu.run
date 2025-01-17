@@ -2,7 +2,7 @@
 
 #SBATCH --time 1:00:00
 #SBATCH --job-name=census_job_gpu   
-#SBATCH --output=/home/dalai/census_VAE/log/3_VAE_train_gpu_%j.out
+#SBATCH --output=/home/dalai/census_VAE/log/3_VAE_train_gpu_dp_%j.out
 #SBATCH --ntasks 4
 #SBATCH --mem 64G
 #SBATCH --partition h100
@@ -18,5 +18,5 @@ JOB_ID=$SLURM_JOB_ID  # This automatically gets the job ID assigned by Slurm
 export PYTHONUNBUFFERED=1 # force to write the ourput fiel while running and not just at the end
 
 # Run the Python script
-python ./../model/train_parallel_gpu_ddp.py --job_id $JOB_ID --seed_crossvalidation 8
+python ./../model/train_parallel_gpu_dp.py --job_id $JOB_ID --seed_crossvalidation 8
 

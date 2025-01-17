@@ -11,7 +11,7 @@ import json
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
 
-from model.VAE_parallel_gpu_dp import *
+from VAE_parallel_gpu_dp import *
 
 # Remember to checj in the outer.run file that the memory and time are appropriate for the task
 
@@ -91,7 +91,7 @@ def main():
     # wirghts of the differt losses of VAE
     weigth_losses = [1, 0.01, 1] #reconstruction, kl, classification
     # Folder where to save logs and results
-    SAVE_FOLDER = f"/scratch/dalai/results_census/3_VAE_train_{job_id}"
+    SAVE_FOLDER = f"/scratch/dalai/results_census/3_VAE_train_gpu_dp_{job_id}"
     os.makedirs(SAVE_FOLDER, exist_ok=True)
 
     print(f"""

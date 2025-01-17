@@ -3,6 +3,9 @@ import copy
 from torch.utils.data import Dataset
 import torch
 
+"""
+Contains Some Useful classes and functions.
+"""
 
 def plot_confusion_matrix(cm, ax, title):
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False, ax=ax)

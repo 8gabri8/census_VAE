@@ -9,6 +9,11 @@ import multiprocessing as mp
 
 from utils import *
 
+"""
+Contains Models Arcchitecture.
+"""
+
+
 class AutoEncoder(nn.Module):
     def __init__(self, input_size, latent_dim=256):
         super().__init__()
