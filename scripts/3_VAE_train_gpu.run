@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --time 0:45:00
+#SBATCH --time 15:00:00
 #SBATCH --job-name=census_job_gpu   
 #SBATCH --output=/home/dalai/census_VAE/log/3_VAE_train_gpu_dp_%j.out
 #SBATCH --ntasks 4

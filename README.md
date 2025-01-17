@@ -68,3 +68,14 @@ The VAE model supports parallelized training to save time. It can run on CPUs or
 - **Running time:**
     - All data (30 datasets) | batchsize=512 | 2 CHF per epoch | 1h per epoch
 
+## Preliminary Results
+
+- 3000 cells, 10 batches:
+<div style="display: flex; justify-content: space-between; align-items: center;">
+    <img src="assets/3_losses_plot_3000cells.png" alt="Image 1" style="width: 65%;">
+    <img src="assets/acc_3000cells.png" alt="Image 2" style="width: 30%; height: auto;">
+</div>
+
+- 30 datasets, 10 batches:
+
+
