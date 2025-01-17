@@ -1,84 +1,70 @@
-# census_VAE
+# Census_VAE
 
-Variational Auto-Encoder model thta tries to predict label diasease based on single cell data sequencing.
+A Variational Auto-Encoder (VAE) model designed to predict disease labels based on single-cell sequencing data.
 
 ## Environment Setup
-The code is designed to run in the **[census_env](assets/requirements.txt)** environment.
 
-## Preprocessing
+Ensure you are using the **[census_env](assets/requirements.txt)** environment to run the code.
 
-Here are reported in the corredt podert the files to preprocess the data. 
+```bash
+conda create --name census_env --file assets/requirements.txt
 
-1) **[scripts/_make_gene_name_vocab.ipynb](scripts/_make_gene_name_vocab.ipynb)**: After downloading the human gene file (please refoer tot the notebook for the link), it create a vocaboltu thta maps eahc gene names ot its ensebale ID (useful for later processing).
+conda activate census_env
+```
 
-2) **[scripts/1_download_datasets.ipynb](scripts/1_download_datasets.ipynb)**: process for downloading, filtering, and organizing datasets:
-   - Filters datasets based on several criteria:
-     - Selects datasets containing human data (`homo_sapiens`).
-     - Datasets with non-zero unique cells.
-        - **ATTENTION**: multiple datasets can share the same cells, thus these duplicates MUST be avoided.
-     - Exclusion of datasets with duplicate entries.
-     - Removal of `cancer-related` datasets based on predefined disease categories.
-   - Handles missing titles and citations by manual mapping.
-   - Saves metadata to a CSV file for later use.
-   - Download datasets, stored in a predefined folder.
-   - P.S. Census data management done using: [Census API Demo for Datasets](https://chanzuckerberg.github.io/cellxgene-census/notebooks/api_demo/census_datasets.html), [Census Query Extraction](https://chanzuckerberg.github.io/cellxgene-census/notebooks/api_demo/census_query_extract.html).
-   - Useful:
-        - Number of unique datasets: 290
-        - Number of unique collections: 112
-        - Number of unique cell types: 593
-        - Number of unique diseases: 40
+## Preprocessing Steps
 
-3) **[scripts/2_preprocess_datasets.py](scripts/2_preprocess_datasets.py)**: As processing all the dataset can be long and requiring lot of memory, to run this step you need to use the EPFL cluster, thus lunch this script using [scripts/3_VAE_train.run](scripts/3_VAE_train.run). The script perform:
-   - Ensures that each dataset includes required columns like `donor_id`, `cell_type`, `disease`, etc.
-   - Applies normalization
-        - **ATTENTION:** check the code for the differt types of normalization that can be perfomed.
-   - Merges all datasets into a single `AnnData` object, ensuring missing genes are handled.
-   - Creates concatenated labels (`cell_type_ontology_term_id-disease_ontology_term_id`) and encodes them as integers.
-   - Removes cells with duplicated barcodes.
-   - Saves the processed dataset as `merged_30.h5ad`.
+The following steps outline the correct order for preprocessing the data:
+
+1. **[scripts/_make_gene_name_vocab.ipynb](scripts/_make_gene_name_vocab.ipynb)**  
+   - After downloading the human gene file (refer to the notebook for the link), this script creates a vocabulary mapping gene names to their Ensembl IDs (useful for subsequent processing).
+
+2. **[scripts/1_download_datasets.ipynb](scripts/1_download_datasets.ipynb)**  
+   - Downloads, filters, and organizes datasets:
+     - Filters for human data (`homo_sapiens`).
+     - Ensures datasets contain non-zero unique cells.
+     - Avoids duplicate datasets sharing the same cells.
+     - Excludes cancer-related datasets based on predefined disease categories.
+     - Handles missing titles and citations via manual mapping.
+     - Saves metadata to a CSV file for later use.
+     - Downloads datasets to a predefined folder.
+   - Relevant resources:
+     - [Census API Demo for Datasets](https://chanzuckerberg.github.io/cellxgene-census/notebooks/api_demo/census_datasets.html)
+     - [Census Query Extraction](https://chanzuckerberg.github.io/cellxgene-census/notebooks/api_demo/census_query_extract.html)
+   - Key Statistics:
+     - Unique datasets: **290**
+     - Unique collections: **112**
+     - Unique cell types: **593**
+     - Unique diseases: **40**
+
+3. **[scripts/2_preprocess_datasets.py](scripts/2_preprocess_datasets.py)**  
+   - Preprocessing large datasets requires significant resources; it is recommended to run this step on the EPFL cluster. Use the script [scripts/3_VAE_train.run](scripts/3_VAE_train.run) to launch this process.  
+   - Main tasks performed:
+     - Ensures datasets include required columns like `donor_id`, `cell_type`, and `disease`.
+     - Applies normalization (check the script for the available normalization methods).
+     - Merges all datasets into a single `AnnData` object, handling missing genes appropriately.
+     - Concatenates and encodes labels (e.g., `cell_type_ontology_term_id-disease_ontology_term_id`) as integers.
+     - Removes cells with duplicate barcodes.
+     - Saves the processed dataset as `merged_30.h5ad`.
+
 
 ## Training
 
-The model to save time is trained using parallel programming. 
-The model can be trained using CPUs or GPUs, in the latter case it can be parallelized using [DP](https://pytorch.org/docs/stable/generated/torch.nn.DataParallel.html) or [DDP](https://pytorch.org/tutorials/beginner/ddp_series_multigpu.html). A little summary:
+The VAE model supports parallelized training to save time. It can run on CPUs or GPUs, with specific support for [Data Parallel (DP)](https://pytorch.org/docs/stable/generated/torch.nn.DataParallel.html) GPU training. A summary of supported configurations:
 
-- CPU: not use. Too Slow.
-- GPU DDP: not use. Code is there, but not work (complicated to parallelize mutliple processes using GPUs).
-- **GPU DP**: Please use this:
-    - [model/VAE_parallel_gpu_dp.py](model/VAE_parallel_gpu_dp.py): contains the model architecture for this specific parallelization.
-    - [model/train_parallel_gpu_dp.py](model/train_parallel_gpu_dp.py): code for the trainign of the model.
-    - [scripts/3_VAE_train_gpu.run](scripts/3_VAE_train_gpu.run): bash script for running the code using SCITAS.
+- **CPU**: Not recommended (too slow).
+- **GPU DDP**: Code exists but is not functional due to the complexity of parallelizing multiple GPU processes.
+- **GPU DP (Recommended)**:
+  - Model Architecture: [model/VAE_parallel_gpu_dp.py](model/VAE_parallel_gpu_dp.py)
+  - Training Code: [model/train_parallel_gpu_dp.py](model/train_parallel_gpu_dp.py)
+  - SCITAS Run Script: [scripts/3_VAE_train_gpu.run](scripts/3_VAE_train_gpu.run)
 
-**Attention:** Before lunching please check in the script the hyperparamters (like the number of epochs).
-**Attention:** The dataset is split in train and test always at the same way. Then the train set is further split in train and validation depeending on the variable `SEED_CROSSVALIDATION`. In this way, by runnign multiple times the script is it possbile to obtain a cross validation result. 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+### Important Notes
+- **Hyperparameters:** Before launching training, verify and update the hyperparameters (e.g., number of epochs) in the scripts.
+- **Dataset Splitting:** 
+  - The dataset is split into training and test sets in a consistent manner.
+  - The training set is further divided into training and validation subsets based on the variable `SEED_CROSSVALIDATION`. 
+  - By running the script multiple times, you can perform cross-validation.
+- **Running time:**
+    - All data (30 datasets) | batchsize=512 | 2 CHF per epoch | 1h per epoch
 

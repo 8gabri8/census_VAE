@@ -9,7 +9,7 @@ import os
 import argparse
 import json
 from sklearn.metrics import confusion_matrix
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score
 
 from VAE_parallel_gpu_dp import *
 
@@ -83,11 +83,9 @@ def main():
     n_classes = len(adata.obs["concat_label_encoded"].unique())
     #n_classes = 265 # ATTENTION: only when using smaller dataset, otherwise CrossEntirpy will give error
     # Number of Epcohs
-    num_epochs = 1
+    num_epochs = 10
     # Batch size
-    batch_size = 512 #100
-    # Number of folds for crossvalidation
-    n_folds = 1
+    batch_size = 512 #512, 100
     # wirghts of the differt losses of VAE
     weigth_losses = [1, 0.01, 1] #reconstruction, kl, classification
     # Folder where to save logs and results
@@ -100,7 +98,6 @@ def main():
     n_classes: {n_classes}
     batch size: {batch_size}
     n epochs: {num_epochs}
-    n folds: {n_folds}
     save folder: {SAVE_FOLDER}\n
     """)
 
@@ -179,18 +176,25 @@ def main():
     print("Predicting labels with trained model in TRAIN set.")
     true_train_labels, predicted_train_labels, _ = calculate_loss_labels(model, adata_train, batch_size, weigth_losses)
     train_accuracy = accuracy_score(true_train_labels, predicted_train_labels)
+    train_f1 = f1_score(true_train_labels, predicted_train_labels)
 
     print("Predicting labels with trained model in VAL set.")
     true_val_labels, predicted_val_labels, _  = calculate_loss_labels(model, adata_val, batch_size, weigth_losses)
     val_accuracy = accuracy_score(true_val_labels, predicted_val_labels)
+    val_f1 = f1_score(true_val_labels, predicted_val_labels)
 
     print("Predicting labels with trained model in TEST set.")
     true_test_labels, predicted_test_labels, _  = calculate_loss_labels(model, adata_test, batch_size, weigth_losses)
     test_accuracy = accuracy_score(true_test_labels, predicted_test_labels)
+    test_f1 = f1_score(true_test_labels, predicted_test_labels)
 
     print(f"Accuracy on TRAIN set: {train_accuracy * 100:.2f}%")
     print(f"Accuracy on VAL set: {val_accuracy * 100:.2f}%")
     print(f"Accuracy on TEST set: {test_accuracy * 100:.2f}%")
+
+    print(f"F1 on TRAIN set: {train_f1 * 100:.2f}%")
+    print(f"F1 on VAL set: {val_f1 * 100:.2f}%")
+    print(f"F1 on TEST set: {test_f1 * 100:.2f}%")
 
     #########################
     ### Save Results
