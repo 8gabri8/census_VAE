@@ -31,7 +31,7 @@ for file_name in os.listdir(DATASET_DIR):
         if os.path.isfile(file_path):  # Check if it's a file
             dataset_paths.append(file_path)
 
-# Columns of .obs that each df must have
+# Columns of .obs that each df MUST have
 must_columns = ["donor_id", 
                 "cell_type", "cell_type_ontology_term_id",
                 "disease", "disease_ontology_term_id", 
@@ -133,6 +133,7 @@ len(adata_datasets_list)
 #########################
 
 print()
+# Normalize one dtaset per time
 for i, adata in enumerate(adata_datasets_list):
     print(f"Normalizing dataset {i}...")
     # Step 1: Normalize the data
@@ -142,7 +143,7 @@ for i, adata in enumerate(adata_datasets_list):
     # TODO: add normalization specific for negative bionomial
         #....
     # Step 3: Z-score
-    #sc.pp.scale(adata)
+    #sc.pp.scale(adata) #ATTENTION: this step makes the matrix dense, so a lot of space is used
 
     # ATTENTION: after these passages matrix becomes dense
     #print(type(adata.X), adata.X.data.nbytes / (1024 ** 3))
