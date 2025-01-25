@@ -176,17 +176,17 @@ def main():
     print("Predicting labels with trained model in TRAIN set.")
     true_train_labels, predicted_train_labels, _ = calculate_loss_labels(model, adata_train, batch_size, weigth_losses)
     train_accuracy = accuracy_score(true_train_labels, predicted_train_labels)
-    train_f1 = f1_score(true_train_labels, predicted_train_labels)
+    train_f1 = f1_score(true_train_labels, predicted_train_labels, average='weighted')
 
     print("Predicting labels with trained model in VAL set.")
     true_val_labels, predicted_val_labels, _  = calculate_loss_labels(model, adata_val, batch_size, weigth_losses)
     val_accuracy = accuracy_score(true_val_labels, predicted_val_labels)
-    val_f1 = f1_score(true_val_labels, predicted_val_labels)
+    val_f1 = f1_score(true_val_labels, predicted_val_labels, average='weighted')
 
     print("Predicting labels with trained model in TEST set.")
     true_test_labels, predicted_test_labels, _  = calculate_loss_labels(model, adata_test, batch_size, weigth_losses)
     test_accuracy = accuracy_score(true_test_labels, predicted_test_labels)
-    test_f1 = f1_score(true_test_labels, predicted_test_labels)
+    test_f1 = f1_score(true_test_labels, predicted_test_labels, average='weighted')
 
     print(f"Accuracy on TRAIN set: {train_accuracy * 100:.2f}%")
     print(f"Accuracy on VAL set: {val_accuracy * 100:.2f}%")
